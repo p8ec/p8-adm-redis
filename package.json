@@ -2,8 +2,8 @@
   "name": "p8-adm-redis",
   "private": true,
   "workspaces": [
-    "apps/api",
-    "apps/web"
+    "packages/api",
+    "packages/web"
   ],
   "scripts": {
     "build": "lerna run build",
@@ -25,5 +25,10 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "commitlint": {
+    "extends": [
+      "@commitlint/config-conventional"
+    ]
   }
 }
