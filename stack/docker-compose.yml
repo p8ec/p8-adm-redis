@@ -1,0 +1,156 @@
+version: '3'
+
+services:
+
+  ################ POSTGRES ################
+
+  postgres:
+    image: postgres
+    restart: unless-stopped
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USERNAME}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    ports:
+      - ${DB_PORT}:5432/tcp
+
+  postgres-ui:
+    image: sosedoff/pgweb
+    restart: unless-stopped
+    ports:
+      - ${DB_UI_PORT}:8081
+    links:
+      - postgres:postgres
+    environment:
+      - DATABASE_URL=postgres://${DB_USERNAME}:${DB_PASSWORD}@postgres:5432/${DB_NAME}?sslmode=disable
+    depends_on:
+      - postgres
+
+  ################ MONGO ################
+
+  mongo:
+    image: mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - ${MONGO_PORT}:27017
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE}
+
+  mongo-ui:
+    image: mongo-express
+    restart: unless-stopped
+    ports:
+      - ${MONGO_UI_PORT}:8081
+    environment:
+#      ME_CONFIG_BASICAUTH_USERNAME: ${MONGO_USERNAME}
+#      ME_CONFIG_BASICAUTH_PASSWORD: ${MONGO_PASSWORD}
+#      ME_CONFIG_MONGODB_SERVER: mongo
+      ME_CONFIG_MONGODB_URL: mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongo:27017/
+
+  ################ REDIS ################
+
+  redis:
+    image: bitnami/redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/bitnami/redis/data
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DISABLE_COMMANDS=FLUSHDB,FLUSHALL
+    ports:
+      - ${REDIS_PORT}:6379/tcp
+
+  redis-ui:
+    image: rediscommander/redis-commander:latest
+    restart: unless-stopped
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    ports:
+      - ${REDIS_UI_PORT}:8081/tcp
+    depends_on:
+      - redis
+
+  ################ KAFKA ################
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    restart: unless-stopped
+    ports:
+      - ${KAFKA_UI_PORT}:8080
+    depends_on:
+      - kafka-zookeeper
+      - kafka-node0
+      - kafka-node1
+    environment:
+      - KAFKA_CLUSTERS_0_NAME="local"
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka-node0:9093
+      - KAFKA_CLUSTERS_0_ZOOKEEPER=kafka-zookeeper:${KAFKA_ZOOKEEPER_PORT}
+      - KAFKA_CLUSTERS_0_JMXPORT=9997
+  #      - AUTH_TYPE = "LOGIN_FORM"
+  #      - SPRING_SECURITY_USER_NAME = "admin"
+  #      - SPRING_SECURITY_USER_PASSWORD = "pass"
+
+  kafka-zookeeper:
+    image: confluentinc/cp-zookeeper:5.2.4
+    restart: unless-stopped
+    ports:
+      - ${KAFKA_ZOOKEEPER_PORT}:${KAFKA_ZOOKEEPER_PORT}
+    environment:
+      - ZOOKEEPER_CLIENT_PORT=${KAFKA_ZOOKEEPER_PORT}
+      - ZOOKEEPER_TICK_TIME=2000
+
+  kafka-node0:
+    image: confluentinc/cp-kafka:latest
+    restart: unless-stopped
+    depends_on:
+      - kafka-zookeeper
+    ports:
+      - ${KAFKA_BROKER0_PORT}:${KAFKA_BROKER0_PORT}
+    environment:
+      KAFKA_BROKER_ID: 0
+      KAFKA_ZOOKEEPER_CONNECT: kafka-zookeeper:${KAFKA_ZOOKEEPER_PORT}
+      KAFKA_ADVERTISED_LISTENERS: DOCKER_NET://kafka-node0:9093,EXTERNAL_NET://localhost:${KAFKA_BROKER0_PORT}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: DOCKER_NET:PLAINTEXT,EXTERNAL_NET:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: DOCKER_NET
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      JMX_PORT: 9997
+      KAFKA_JMX_OPTS: >-
+        -Dcom.sun.management.jmxremote
+        -Dcom.sun.management.jmxremote.authenticate=false 
+        -Dcom.sun.management.jmxremote.ssl=false 
+        -Djava.rmi.server.hostname=kafka-node0 
+        -Dcom.sun.management.jmxremote.rmi.port=9997
+
+  kafka-node1:
+    image: confluentinc/cp-kafka:latest
+    restart: unless-stopped
+    depends_on:
+      - kafka-zookeeper
+    ports:
+      - ${KAFKA_BROKER1_PORT}:${KAFKA_BROKER1_PORT}
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: kafka-zookeeper:${KAFKA_ZOOKEEPER_PORT}
+      KAFKA_ADVERTISED_LISTENERS: DOCKER_NET://kafka-node1:9093,EXTERNAL_NET://localhost:${KAFKA_BROKER1_PORT}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: DOCKER_NET:PLAINTEXT,EXTERNAL_NET:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: DOCKER_NET
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      JMX_PORT: 9997
+      KAFKA_JMX_OPTS: >-
+        -Dcom.sun.management.jmxremote 
+        -Dcom.sun.management.jmxremote.authenticate=false 
+        -Dcom.sun.management.jmxremote.ssl=false 
+        -Djava.rmi.server.hostname=kafka-node1 
+        -Dcom.sun.management.jmx
+
+volumes:
+  pg_data:
+  redis_data:
+  mongo_data:
